@@ -121,9 +121,19 @@ namespace IMAC
 						int dX = x + i - matSize / 2;
 						int dY = y + j - matSize / 2;
 
-						const int idMat		= j * matSize + i;
-						const uchar4 pixel = tex1D<uchar4>(texObj, dY * width + dX);
+						// Handle out-of-bounds
+						if (dX < 0) dX = 0;
+						if (dX >= width) dX = width - 1;
+						if (dY < 0) dY = 0;
+						if (dY >= height) dY = height - 1;
 
+						// Compute normalized coordinates
+						float texCoord = (dY * width + dX) / (float)(width * height);
+
+						// Fetch from texture
+						uchar4 pixel = tex1Dfetch<uchar4>(texObj, texCoord);
+						
+						const int idMat = j * matSize + i;
 						sum.x += (float)pixel.x * constant_mat[idMat];
 						sum.y += (float)pixel.y * constant_mat[idMat];
 						sum.z += (float)pixel.z * constant_mat[idMat];
@@ -363,6 +373,103 @@ namespace IMAC
 		cudaMallocArray(&dev_array, &channelDesc, inputImg.size());
 
 		// Copy device memory to CUDA array
+		cudaMemcpyToArray(dev_array, 0, 0, inputImg.data(), bytes, cudaMemcpyDeviceToDevice);
+
+		// Init texture ressources
+		struct cudaResourceDesc resDesc {};
+		resDesc.resType = cudaResourceTypeArray;
+		resDesc.res.array.array = dev_array;
+
+		// Init texture descriptor
+		struct cudaTextureDesc texDesc {};
+		texDesc.addressMode[0] = cudaAddressModeClamp;
+		texDesc.filterMode = cudaFilterModePoint;
+		texDesc.readMode = cudaReadModeElementType;
+		texDesc.normalizedCoords = 1;
+
+		// Init texture object
+		cudaTextureObject_t texObj = 0;
+		cudaCreateTextureObject(&texObj, &resDesc, &texDesc, nullptr);
+
+		cudaDeviceProp prop;
+		const dim3 threads(32, 32); // 32 * 32 = 1024
+		const dim3 blocks( ( imgWidth + threads.x - 1 ) / threads.x, ( imgHeight + threads.y - 1 ) / threads.y );
+
+		std::cout << "-> Size of blocks x : " << blocks.x << " || Size of blocks y : " << blocks.y << std::endl;
+		
+		// Launch kernel
+		std::cout << "Naive Convolution on GPU (" 	<< blocks.x << "x" << blocks.y << " blocks - " 
+												<< threads.x << "x" << threads.y << " threads)" << std::endl;
+		chrGPU.start();
+		conv_1dtex<<<blocks, threads>>>(texObj, imgWidth, imgHeight, matSize, dev_output);
+		chrGPU.stop();
+		std::cout 	<< "-> Done : " << chrGPU.elapsedTime() << " ms" << std::endl << std::endl;
+
+		// Copy data from device to host (output array)   
+		std::cout << "Copy output from device to host" << std::endl;
+		chrGPU.start();
+		HANDLE_ERROR( cudaMemcpy( output.data(), dev_output, bytes, cudaMemcpyDeviceToHost ) ); 		
+		chrGPU.stop();
+		std::cout 	<< "-> Done : " << chrGPU.elapsedTime() << " ms" << std::endl;
+
+		// Free arrays on device
+		std::cout << "Free memory on GPU" << std::endl;
+		cudaDestroyTextureObject(texObj);
+		cudaFree(dev_input);
+		cudaFree(dev_output);
+
+		std::cout << "Comparison of final results" << std::endl;
+		compareImages(resultCPU, output);
+
+		std::cout << "============================================================" << std::endl << std::endl;
+	}
+	
+    void studentJob_Tex2D(const std::vector<uchar4> &inputImg, // Input image
+					const uint imgWidth, const uint imgHeight, // Image size
+                    const std::vector<float> &matConv, // Convolution matrix (square)
+					const uint matSize, // Matrix size (width or height)
+					const std::vector<uchar4> &resultCPU, // Just for comparison
+                    std::vector<uchar4> &output // Output image
+					)
+	{
+		std::cout << "====================================================== Texture 2D" << std::endl;
+		
+		std::cout << "====================================================== Texture 1D" << std::endl;
+		ChronoGPU chrGPU;
+
+		// cudaTextureObject_t *pTexObject, const cudaResourceDesc *pResDesc, const cudaTextureDesc *pTexDesc, const cudaResourceViewDesc *pResViewDesc
+		//cudaCreateTextureObject() 
+
+		uchar4 *dev_input = NULL;
+		uchar4 *dev_output = NULL;
+
+		const size_t bytes = inputImg.size() * sizeof(uchar4);
+		const size_t bytes_mat = matConv.size() * sizeof(float);
+
+		std::cout 	<< "Allocating input (2 arrays) and matrix: " 
+					<< ( ( 2 * bytes + bytes_mat ) >> 20 ) << " MB on Device" << std::endl;
+		chrGPU.start();		
+		HANDLE_ERROR( cudaMalloc( (void**)&dev_input, bytes ) );
+		HANDLE_ERROR( cudaMalloc( (void**)&dev_output, bytes ) );	
+		chrGPU.stop();
+		std::cout 	<< "-> Done : " << chrGPU.elapsedTime() << " ms" << std::endl << std::endl;
+
+		// Copy data from host to device (input array) 
+		std::cout << "Copy input from host to device" << std::endl;
+		chrGPU.start();		
+		HANDLE_ERROR( cudaMemcpy( dev_input, inputImg.data(), bytes, cudaMemcpyHostToDevice ) );
+		// Copy the host array to device constant memory
+    	HANDLE_ERROR( cudaMemcpyToSymbol( constant_mat, matConv.data(), bytes_mat ) );
+		chrGPU.stop();
+		std::cout 	<< "-> Done : " << chrGPU.elapsedTime() << " ms" << std::endl << std::endl;
+
+		// Create CUDA array for texture binding
+		cudaChannelFormatDesc channelDesc = cudaCreateChannelDesc<uchar4>();
+		cudaArray_t dev_array;
+		cudaMallocArray(&dev_array, &channelDesc, inputImg.size());
+		//cudaMallocPitch()
+
+		// Copy device memory to CUDA array
 		cudaMemcpyToArray(dev_array, 0, 0, dev_input, bytes, cudaMemcpyDeviceToDevice);
 
 		// Free the device buffer because data is now in CUDA Array
@@ -409,24 +516,6 @@ namespace IMAC
 		std::cout << "Free memory on GPU" << std::endl;
 		cudaDestroyTextureObject(texObj);
 		cudaFree(dev_output);
-
-		std::cout << "Comparison of final results" << std::endl;
-		compareImages(resultCPU, output);
-
-		std::cout << "============================================================" << std::endl << std::endl;
-	}
-	
-    void studentJob_Tex2D(const std::vector<uchar4> &inputImg, // Input image
-					const uint imgWidth, const uint imgHeight, // Image size
-                    const std::vector<float> &matConv, // Convolution matrix (square)
-					const uint matSize, // Matrix size (width or height)
-					const std::vector<uchar4> &resultCPU, // Just for comparison
-                    std::vector<uchar4> &output // Output image
-					)
-	{
-		std::cout << "====================================================== Texture 2D" << std::endl;
-		
-		/// TODO !!!!!!!!!!!!!!!
 
 		std::cout << "Comparison of final results" << std::endl;
 		compareImages(resultCPU, output);
