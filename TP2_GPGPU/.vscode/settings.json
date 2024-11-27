@@ -61,6 +61,15 @@
         "typeinfo": "cpp",
         "variant": "cpp",
         "format": "cpp",
-        "__nullptr": "cpp"
+        "__nullptr": "cpp",
+        "csignal": "cpp",
+        "strstream": "cpp",
+        "complex": "cpp",
+        "list": "cpp",
+        "map": "cpp",
+        "set": "cpp",
+        "ranges": "cpp",
+        "cinttypes": "cpp",
+        "typeindex": "cpp"
     }
 }
