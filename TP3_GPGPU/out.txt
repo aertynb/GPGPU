@@ -1,0 +1,21 @@
+Max reduce for an array of size 32
+Allocating array on host, 0 MB
+Initiliazing array...
+Process on CPU (sequential)
+ -> Done : max is 80327024 (0.001 ms)
+
+============================================
+              STUDENT'S JOB !               
+============================================
+Test with 1 iterations
+========== Ex 1 
+Computing on 32768 block(s) and 1024 thread(s) - shared mem size = 4096
+ -> Done: 1.39981 us on device and 95 us on host.
+Well done ! 80327024 == 80327024 !!!
+========== Ex 2 
+Computing on 32768 block(s) and 1024 thread(s) - shared mem size = 4096
+ -> Done: 1.27459 us on device and 96 us on host.
+Well done ! 80327024 == 80327024 !!!
+========== Ex 3 
+========= CUDA-MEMCHECK
+========= ERROR SUMMARY: 0 errors
