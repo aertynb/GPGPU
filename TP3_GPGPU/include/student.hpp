@@ -36,6 +36,12 @@ namespace IMAC
 
 	__global__
     void maxReduce_ex2(const uint *const dev_array, const uint size, uint *const dev_partialMax);
+
+	__global__
+    void maxReduce_ex3(const uint *const dev_array, const uint size, uint *const dev_partialMax);
+
+	__global__
+    void maxReduce_ex4(const uint *const dev_array, const uint size, uint *const dev_partialMax);
     
 	// return a uint2 with x: dimBlock / y: dimGrid
     template<uint kernelType>
@@ -55,9 +61,13 @@ namespace IMAC
 				dimBlockGrid.y = DEFAULT_NB_BLOCKS;
 			break;
 			case KERNEL_EX3:
+				dimBlockGrid.x = MAX_NB_THREADS; 
+				dimBlockGrid.y = DEFAULT_NB_BLOCKS/2;
 				/// TODO EX 3
 			break;
 			case KERNEL_EX4:
+				dimBlockGrid.x = MAX_NB_THREADS; 
+				dimBlockGrid.y = DEFAULT_NB_BLOCKS/2;
 				/// TODO EX 4
 			break;
 			case KERNEL_EX5:
@@ -77,8 +87,6 @@ namespace IMAC
 	{
         const uint2 dimBlockGrid = configureKernel<kernelType>(size); // x: dimBlock / y: dimGrid
 
-		// Allocate arrays (host and device) for partial result
-		/// TODO
 		std::vector<uint> host_partialMax(dimBlockGrid.y); // REPLACE SIZE !
 		const size_t bytesPartialMax = dimBlockGrid.y * sizeof(uint); // REPLACE BYTES !
 		const size_t bytesSharedMem = dimBlockGrid.x * sizeof(uint); // REPLACE BYTES !
@@ -110,11 +118,13 @@ namespace IMAC
 				break;
 				case KERNEL_EX3:
 					/// TODO EX 3
-					std::cout << "Not implemented !" << std::endl;
+					maxReduce_ex3<<<dimBlockGrid.y, dimBlockGrid.x, bytesSharedMem>>>(dev_array, size, dev_partialMax);
+					//std::cout << "Not implemented !" << std::endl;
 				break;
 				case KERNEL_EX4:
 					/// TODO EX 4
-					std::cout << "Not implemented !" << std::endl;
+					maxReduce_ex4<<<dimBlockGrid.y, dimBlockGrid.x, bytesSharedMem>>>(dev_array, size, dev_partialMax);
+					//std::cout << "Not implemented !" << std::endl;
 				break;
 				case KERNEL_EX5:
 					/// TODO EX 5

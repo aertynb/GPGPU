@@ -40,7 +40,7 @@ static void verifyDimGridBlock(const uint dimGrid, const uint dimBlock, const ui
 
 	if ( dimBlock > maxThreadsPerBlock ) 
     {   
-        throw std::runtime_error("Maximum threads per block exceeded");
+        throw std::runtime_error("Maximum threads per block exceeded ");
 	}
 
 	if  ( dimGrid > maxGridSize ) 

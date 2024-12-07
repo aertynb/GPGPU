@@ -64,8 +64,74 @@ namespace IMAC
 			dev_partialMax[blockIdx.x] = values[index];
 	}
 
+	__global__
+	void maxReduce_ex3(const uint *const dev_array, const uint size, uint *const dev_partialMax)
+	{
+		extern __shared__ uint values[];
+		int globalIndex = 2 * (blockIdx.x * blockDim.x + threadIdx.x);
+		int localIndex = threadIdx.x;
+
+		uint val1 = (globalIndex < size) ? dev_array[globalIndex] : 0;
+		uint val2 = (globalIndex + 1 < size) ? dev_array[globalIndex + 1] : 0;
+
+		values[localIndex] = umax(val1, val2);
+		__syncthreads();
+
+		for (int stride = blockDim.x / 2; stride > 0; stride /= 2) {
+			if (localIndex < stride) {
+				values[localIndex] = umax(values[localIndex], values[localIndex + stride]);
+			}
+			__syncthreads();
+		}
+
+		if (localIndex == 0) {
+			dev_partialMax[blockIdx.x] = values[0];
+		}
+	}
+
+	__global__
+void maxReduce_ex4(const uint *const dev_array, const uint size, uint *const dev_partialMax)
+{
+    extern __shared__ uint values[];
+    int globalIndex = 2 * (blockIdx.x * blockDim.x + threadIdx.x); 
+    int localIndex = threadIdx.x;
+
+    uint val1 = (globalIndex < size) ? dev_array[globalIndex] : 0;
+    uint val2 = (globalIndex + 1 < size) ? dev_array[globalIndex + 1] : 0;
+
+    values[localIndex] = umax(val1, val2);
+    __syncthreads();
+
+    for (int stride = blockDim.x / 2; stride > 32; stride /= 2) {
+        if (localIndex < stride) {
+            values[localIndex] = umax(values[localIndex], values[localIndex + stride]);
+        }
+        __syncthreads();
+    }
+
+    volatile uint* vvalues = values;
+
+    if (localIndex < 32) {
+        vvalues[localIndex] = umax(vvalues[localIndex], vvalues[localIndex + 32]);
+        vvalues[localIndex] = umax(vvalues[localIndex], vvalues[localIndex + 16]);
+        vvalues[localIndex] = umax(vvalues[localIndex], vvalues[localIndex + 8]);
+        vvalues[localIndex] = umax(vvalues[localIndex], vvalues[localIndex + 4]);
+        vvalues[localIndex] = umax(vvalues[localIndex], vvalues[localIndex + 2]);
+        vvalues[localIndex] = umax(vvalues[localIndex], vvalues[localIndex + 1]);
+    }
+
+    // Le thread 0 écrit le maximum partiel dans la mémoire globale
+    if (localIndex == 0) {
+        dev_partialMax[blockIdx.x] = values[0];
+    }
+}
+
 	void studentJob(const std::vector<uint> &array, const uint resCPU /* Just for comparison */, const uint nbIterations)
     {
+		cudaDeviceProp prop;
+		cudaGetDeviceProperties(&prop, 0);
+		std::cout << "Max threads per block: " << prop.maxThreadsPerBlock << std::endl;
+		
 		uint *dev_array = NULL;
         const size_t bytes = array.size() * sizeof(uint);
 
