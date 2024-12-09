@@ -1,28 +1,43 @@
-Max reduce for an array of size 8388608
-Allocating array on host, 32 MB
+Max reduce for an array of size 67108864
+Allocating array on host, 256 MB
 Initiliazing array...
 Process on CPU (sequential)
- -> Done : max is 80248257 (27.915 ms)
+ -> Done : max is 79797925 (124.061 ms)
 
 ============================================
               STUDENT'S JOB !               
 ============================================
 Max threads per block: 1024
-Test with 1 iterations
+Test with 10 iterations
 ========== Ex 1 
-Computing on 32768 block(s) and 1024 thread(s) - shared mem size = 4096
- -> Done: 1.07248 us on device and 148 us on host.
-Well done ! 80248257 == 80248257 !!!
+Computing on 65536 block(s) and 1024 thread(s) - shared mem size = 4096
+ -> Done: 12.437 us on device and 196 us on host.
+Well done ! 79797925 == 79797925 !!!
 ========== Ex 2 
-Computing on 32768 block(s) and 1024 thread(s) - shared mem size = 4096
- -> Done: 942.624 us on device and 302 us on host.
-Well done ! 80248257 == 80248257 !!!
+Computing on 65536 block(s) and 1024 thread(s) - shared mem size = 4096
+ -> Done: 9.81106 us on device and 203 us on host.
+Well done ! 79797925 == 79797925 !!!
 ========== Ex 3 
-Computing on 16384 block(s) and 1024 thread(s) - shared mem size = 4096
- -> Done: 1.38563 us on device and 72 us on host.
-Well done ! 80248257 == 80248257 !!!
+Computing on 32768 block(s) and 1024 thread(s) - shared mem size = 4096
+ -> Done: 3.8431 us on device and 99 us on host.
+Well done ! 79797925 == 79797925 !!!
 ========== Ex 4 
-Computing on 16384 block(s) and 1024 thread(s) - shared mem size = 4096
- -> Done: 859.36 us on device and 75 us on host.
-Well done ! 80248257 == 80248257 !!!
+Computing on 32768 block(s) and 1024 thread(s) - shared mem size = 4096
+ -> Done: 2.67268 us on device and 98 us on host.
+Well done ! 79797925 == 79797925 !!!
 ========== Ex 5 
+Computing on 0 block(s) and 8 thread(s) - shared mem size = 32
+Not implemented !
+Not implemented !
+Not implemented !
+Not implemented !
+Not implemented !
+Not implemented !
+Not implemented !
+Not implemented !
+Not implemented !
+Not implemented !
+ -> Done: 4.7584 us on device and 0 us on host.
+You failed ! 0 != 79797925 !!!
+============================================
+

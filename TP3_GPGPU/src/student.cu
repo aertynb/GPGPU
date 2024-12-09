@@ -120,7 +120,6 @@ void maxReduce_ex4(const uint *const dev_array, const uint size, uint *const dev
         vvalues[localIndex] = umax(vvalues[localIndex], vvalues[localIndex + 1]);
     }
 
-    // Le thread 0 écrit le maximum partiel dans la mémoire globale
     if (localIndex == 0) {
         dev_partialMax[blockIdx.x] = values[0];
     }

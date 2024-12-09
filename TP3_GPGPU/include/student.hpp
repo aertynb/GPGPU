@@ -54,20 +54,34 @@ namespace IMAC
 		{
 			case KERNEL_EX1:
 				dimBlockGrid.x = MAX_NB_THREADS; 
-				dimBlockGrid.y = DEFAULT_NB_BLOCKS;
+				if (sizeArray < dimBlockGrid.x) {
+					dimBlockGrid.x = nextPow2(sizeArray);
+				}
+				dimBlockGrid.y = sizeArray / dimBlockGrid.x;
 			break;
 			case KERNEL_EX2:
 				dimBlockGrid.x = MAX_NB_THREADS; 
-				dimBlockGrid.y = DEFAULT_NB_BLOCKS;
+				if (sizeArray < dimBlockGrid.x) {
+					dimBlockGrid.x = nextPow2(sizeArray);
+				}
+				dimBlockGrid.y = sizeArray / dimBlockGrid.x;
 			break;
 			case KERNEL_EX3:
 				dimBlockGrid.x = MAX_NB_THREADS; 
-				dimBlockGrid.y = DEFAULT_NB_BLOCKS/2;
+				if (sizeArray < dimBlockGrid.x) {
+					dimBlockGrid.x = nextPow2(sizeArray);
+				}
+				dimBlockGrid.y = sizeArray / dimBlockGrid.x;
+				dimBlockGrid.y /= 2;
 				/// TODO EX 3
 			break;
 			case KERNEL_EX4:
 				dimBlockGrid.x = MAX_NB_THREADS; 
-				dimBlockGrid.y = DEFAULT_NB_BLOCKS/2;
+				if (sizeArray < dimBlockGrid.x) {
+					dimBlockGrid.x = nextPow2(sizeArray);
+				}
+				dimBlockGrid.y = sizeArray / dimBlockGrid.x;
+				dimBlockGrid.y /= 2;
 				/// TODO EX 4
 			break;
 			case KERNEL_EX5:
