@@ -88,7 +88,7 @@ namespace IMAC
 		std::cout 	<< " -> Done : " << chrCPU.elapsedTime() << " ms" << std::endl << std::endl;
 	}
 
-	void RGBtoHSV(const std::vector<uchar3>& input, std::vector<uchar3>& output) {
+	void RGBtoHSV(const std::vector<uchar4>& input, std::vector<uchar4>& output) {
 		for (size_t i = 0; i < input.size(); ++i) {
 			// Normalize RGB values to [0, 1]
 			float r = input[i].x / 255.0f;
@@ -124,10 +124,11 @@ namespace IMAC
 			output[i].x = static_cast<unsigned char>(h / 360.0f * 255.0f);
 			output[i].y = static_cast<unsigned char>(s * 255.0f);
 			output[i].z = static_cast<unsigned char>(v * 255.0f);
+			output[i].w = 255;
 		}
 	}
 
-	void HSVtoRGB(const std::vector<uchar3>& input, std::vector<uchar3>& output) {
+	void HSVtoRGB(const std::vector<uchar4>& input, std::vector<uchar4>& output) {
 		for (size_t i = 0; i < input.size(); ++i) {
 			// Normalize HSV values
 			float H = input[i].x / 255.0f * 360.0f; // [0, 255] -> [0, 360]
@@ -157,11 +158,12 @@ namespace IMAC
 			output[i].x = static_cast<unsigned char>((r + m) * 255.0f);
 			output[i].y = static_cast<unsigned char>((g + m) * 255.0f);
 			output[i].z = static_cast<unsigned char>((b + m) * 255.0f);
+			output[i].w = 255;
 		}
 	}
 
 
-	const std::vector<int> getCumulHisto(const std::vector<uchar3>& input) {
+	const std::vector<int> getCumulHisto(const std::vector<uchar4>& input) {
 		int L = 256; 
 		int n = input.size();
 
@@ -180,6 +182,21 @@ namespace IMAC
 		return cumulative;
 	}
 
+	void equalizeHistogramCPU(const std::vector<uchar4>& inputHSV, 
+                          std::vector<uchar4>& outputHSV, 
+                          const uint imgWidth, 
+                          const uint imgHeight) {
+		const int L = 256; // Number of intensity levels
+		const int numPixels = imgWidth * imgHeight;
+		auto histo = getCumulHisto(inputHSV);
+
+		outputHSV.resize(inputHSV.size());
+		for (size_t i = 0; i < inputHSV.size(); ++i) {
+			outputHSV[i] = inputHSV[i]; // Copy H and S
+			outputHSV[i].z = static_cast<uchar>(
+					(((L - 1) * static_cast<float>(histo[outputHSV[i].z])) / static_cast<float>(L * numPixels)) * 255);
+		}
+	}
 
 	// Main function
 	void main(int argc, char **argv) 
@@ -214,47 +231,44 @@ namespace IMAC
 		uint imgHeight;
 
 		std::cout << "Loading " << fileName << std::endl;
-		unsigned error = lodepng::decode(inputUchar, imgWidth, imgHeight, fileName, LCT_RGB);
+		unsigned error = lodepng::decode(inputUchar, imgWidth, imgHeight, fileName, LCT_RGBA);
 		if (error) {
 			throw std::runtime_error("Error lodepng::decode: " + std::string(lodepng_error_text(error)));
 		}
 
-		// Convert input to uchar3
-		std::vector<uchar3> input;
-		input.resize(inputUchar.size() / 3); // Divide by 3
+		// Convert input to uchar4
+		std::vector<uchar4> input;
+		input.resize(inputUchar.size() / 4);
 		for (uint i = 0; i < input.size(); ++i) {
-			const uint id = 3 * i; // Each pixel has 3 components: R, G, B
+			const uint id = 4 * i;
 			input[i].x = inputUchar[id];     // R
 			input[i].y = inputUchar[id + 1]; // G
 			input[i].z = inputUchar[id + 2]; // B
+			input[i].w = inputUchar[id + 3]; // A
 		}
 
 		std::cout << "Image has " << imgWidth << " x " << imgHeight << " pixels (RGBA)" << std::endl;
 
 		// RGB to HSV
-		std::vector<uchar3> inputHSV(input.size());
+		std::vector<uchar4> inputHSV(input.size());
 		RGBtoHSV(input, inputHSV);
 		
 		// Get cumulative histo with CPU
-		const auto histo = getCumulHisto(inputHSV);
+		const auto histoCPU = getCumulHisto(inputHSV);
+		std::vector<int> histo (256, 0);
 
-		std::vector<uchar3> outputGPU (imgHeight * imgWidth);
+		std::vector<uchar4> outputGPU (imgHeight * imgWidth);
+		std::vector<uchar4> outputCPU (imgHeight * imgWidth);
+
+		equalizeHistogramCPU(inputHSV, outputCPU, imgWidth, imgHeight);
 
 		//To do GPU operation
-		studentJob(inputHSV, imgWidth, imgHeight, histo, outputGPU);
+		studentJob(input, imgWidth, imgHeight, histo, histoCPU, outputCPU, outputGPU);
 
 		// HSV to RGB
-		std::vector<uchar3> outputRGB(outputGPU.size());
-		HSVtoRGB(outputGPU, outputRGB);
+		std::vector<uchar4> outputRGBCPU(outputGPU.size());
+		HSVtoRGB(outputCPU, outputRGBCPU);
 
-		// Add alpha channel back for saving as RGBA
-		std::vector<uchar> outputUchar(outputRGB.size() * 3);
-		for (uint i = 0; i < outputRGB.size(); ++i) {
-			const uint id = 3 * i;
-			outputUchar[id] = outputRGB[i].x;     // R
-			outputUchar[id + 1] = outputRGB[i].y; // G
-			outputUchar[id + 2] = outputRGB[i].z; // B
-		}
 
 		// Prepare output file name
 		const std::string fileNameStr(fileName);
@@ -262,59 +276,20 @@ namespace IMAC
 		std::string ext = fileNameStr.substr(lastPoint);
 		std::string name = fileNameStr.substr(0,lastPoint);
 		std::string outputGPUName = name + "_GPU" + ext;
-
-		std::cout << "Save image as: " << outputGPUName << std::endl;
-		error = lodepng::encode(outputGPUName, outputUchar, imgWidth, imgHeight, LCT_RGB);
-		if (error) {
-			throw std::runtime_error("Error lodepng::encode: " + std::string(lodepng_error_text(error)));
-		}
-
-
-		/*// Init convolution matrix
-		std::vector<float> matConv;
-		uint matSize;
-		initConvolutionMatrix(convType, matConv, matSize);
-
-		// Create 2 output images
-		std::vector<uchar4> outputCPU(imgWidth * imgHeight);
-		std::vector<uchar4> outputGPU(imgWidth * imgHeight);
-
-		
-		std::cout << input.size() << " - " << outputCPU.size() << " - " << outputGPU.size() << std::endl;
-
-		// Prepare output file name
-		const std::string fileNameStr(fileName);
-		std::size_t lastPoint = fileNameStr.find_last_of(".");
-		std::string ext = fileNameStr.substr(lastPoint);
-		std::string name = fileNameStr.substr(0,lastPoint);
-		std::string convStr = convertConvTypeToString(convType);
-		std::string outputCPUName = name + convStr + "_CPU" + ext;
-		std::string outputGPUName = name + convStr + "_GPU" + ext;
-
-		// Computation on CPU
-		convCPU(input, imgWidth, imgHeight, matConv, matSize, outputCPU);
-		
-		std::cout << "Save image as: " << outputCPUName << std::endl;
-		error = lodepng::encode(outputCPUName, reinterpret_cast<uchar *>(outputCPU.data()), imgWidth, imgHeight, LCT_RGBA);
-		if (error)
-		{
-			throw std::runtime_error("Error loadpng::encode: " + std::string(lodepng_error_text(error)));
-		}
-		
-		std::cout 	<< "============================================"	<< std::endl
-					<< "              STUDENT'S JOB !               "	<< std::endl
-					<< "============================================"	<< std::endl;
-
-		studentJob(input, imgWidth, imgHeight, matConv, matSize, outputCPU, outputGPU);
+		std::string outputCPUName = name + "_CPU" + ext;
 
 		std::cout << "Save image as: " << outputGPUName << std::endl;
 		error = lodepng::encode(outputGPUName, reinterpret_cast<uchar *>(outputGPU.data()), imgWidth, imgHeight, LCT_RGBA);
+		if (error) {
+			throw std::runtime_error("Error lodepng::encode: " + std::string(lodepng_error_text(error)));
+		}
+		error = lodepng::encode(outputCPUName, reinterpret_cast<uchar *>(outputRGBCPU.data()), imgWidth, imgHeight, LCT_RGBA);
 		if (error)
 		{
 			throw std::runtime_error("Error loadpng::decode: " + std::string(lodepng_error_text(error)));
 		}
 		
-		std::cout << "============================================"	<< std::endl << std::endl;*/
+		std::cout << "============================================"	<< std::endl << std::endl;
 	}
 }
 
